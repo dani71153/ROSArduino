@@ -1,0 +1,13 @@
+En este documento voy a registrar los elementos que me faltan para este proyecto. 
+
+1. Voy a instalar Git para llevar un control de versiones. Porque si no puedo perderlo todo.
+
+2. Coordinar los ticks por revoluciones;
+Segun la definicion, por una revolucion son 64 Counts. Y se multiplica por la reduccion, es decir.
+
+60 * 270 = 17280
+Por revolucion del PID = 30ms
+17280/30 = 426 = 1 rev/seg
+ entonces, todos son multiplos de esto.
+ Tamano de la rueda 5cm.
+ Radio = 2.5cm.
