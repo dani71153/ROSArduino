@@ -134,6 +134,12 @@ class Motor {
 
 /** Version Original de Calcular PID, no tiene el decremento y ajuste de las ganancias a medida que aumenta la velocidad.*/
     float calcularPID(float referencia, float actual) {
+        if(referencia == 0)
+      {
+        errorActual=0;
+        sumaErrores =0;
+      }
+
       errorActual = referencia - actual;
       sumaErrores += errorActual;
       //Linea Agregada el 23 de Enero. A ver si mejora el antiwindup.
