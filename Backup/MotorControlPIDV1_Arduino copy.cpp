@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Encoder.h>
-
+//Corresponde a la copia de seguridad del 13 de enero. .
 /**
  * Características y Funcionalidades del Código (Antes de los Cambios)
  *
@@ -32,7 +32,7 @@
  * 7. Actualización periódica:
  *    - El método `actualizar` verifica si ha transcurrido el intervalo de muestreo para realizar las operaciones de lectura del encoder, cálculo del PID y actualización del motor.
  *
- * Agregados hoy 14 de Enero:
+ * Agregados hoy 13 de Enero:
  *
  * 1. Parada Activa:
  *    - Se implementó un mecanismo de frenado activo en el método controlarMotor. Esto asegura que el motor se detenga de manera rápida y precisa, reduciendo el deslizamiento.
@@ -41,11 +41,7 @@
  * 2. Anti-Windup:
  *    - Se añadió una limitación a la acumulación de errores en el cálculo del PID (término integral), para evitar el windup.
  *    - Esto asegura que el término integral no crezca indefinidamente, lo que mejora la respuesta del sistema y evita comportamientos inestables.
- * Para la nota de hoy de la bitacora. Se puede agregar que para mejoras futuras, se puede trabajar en un PID que corrija de mejor manera a velocidades más altas.
- * Tambien, se cambiaron los tiempos de el PID a 1 ms para el muestreo.
- *
- * 
- *  */
+ */
 
 class Motor {
   private:
@@ -130,18 +126,10 @@ class Motor {
       return velocidad;
     }
 
-
-
-/** Version Original de Calcular PID, no tiene el decremento y ajuste de las ganancias a medida que aumenta la velocidad.*/
     float calcularPID(float referencia, float actual) {
       errorActual = referencia - actual;
       sumaErrores += errorActual;
-      //Linea Agregada el 23 de Enero. A ver si mejora el antiwindup.
-
-    // Evitamos la acumulación descontrolada del error integral si la salida está saturada
-    /*if (valorPWM < 255 && valorPWM > -255) {
-        sumaErrores += errorActual;
-    }*/
+      
       //Definimos un antiwindup. Para evitar la acumulacion de errores.
       if (sumaErrores > 1000) sumaErrores = 1000; // Ajusta según tus necesidades
       if (sumaErrores < -1000) sumaErrores = -1000;
@@ -156,7 +144,6 @@ class Motor {
 
       return salida;
     }
-
     void controlarMotor(float valorPID) {
       if (valorPID > 0) {
         digitalWrite(pinIN1, HIGH);
@@ -200,13 +187,8 @@ class Motor {
       digitalWrite(pinIN1, LOW); // Apagar las entradas del motor
       digitalWrite(pinIN2, LOW); // Apagar las entradas del motor
     }
-
-
-  void resetEncodersValues(){
-  encoder.write(0);
-}
-
 };
+
 /* Modificaciones realizadas:
 1. Se agregó la función `desactivarMotor()` para desactivar el enable del controlador L298N y poner a LOW las entradas del motor.
    - Esta función se utiliza para desactivar completamente el motor cuando no se reciben comandos.

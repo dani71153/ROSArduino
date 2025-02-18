@@ -1,47 +1,57 @@
 #include <MotorControlPIDV1_Arduino.cpp>
+#include <ACS712.h>
+
+// === CONFIGURACIÓN DEL SENSOR ACS712 ===
+ACS712 myACS(A15, 5.0, 1023, 185);
 
 // Instanciar motores
-// Motor(int enable, int in1, int in2, int encoderA, int encoderB, float kp, float ki, float kd, unsigned long muestreo)
-Motor motor1(5, 7, 8, 19, 18, 0.1, 0, 0.015, 30);
-Motor motor2(44, A13, A12, 3, 2, 0.1, 0.0, 0.015, 30);
+Motor motor1(5, 7, 8, 19, 18, 0.1, 0, 0.015, 1);
+Motor motor2(44, A13, A12, 3, 2, 0.1, 0.0, 0.015, 1);
 
-char inputCommand[100];  // Variable para almacenar el comando recibido
-int commandIndex = 0;
-void processCommand(char* command);
-bool usarPID = true;  // Variable para controlar si se usa PID o no
-long int Baudrate = 115200;
-
-unsigned long lastCommandTime = 0;  // Variable para almacenar el tiempo del último comando recibido
-const unsigned long timeout = 3000;   // Tiempo de espera reducido para respuesta rápida
+String inputCommand = ""; // Variable para almacenar el comando recibido
+void processCommand(String command);
+bool usarPID = true; // Variable para controlar si se usa PID o no
+unsigned long lastCommandTime = 0; // Variable para almacenar el tiempo del último comando recibido
+const unsigned long timeout = 3000; // Tiempo de espera (3 segundos)
 
 void setup() {
-  Serial.begin(Baudrate);
-  while (!Serial) { /* Esperar a que el puerto serial esté listo */ }
+  Serial.begin(115200);
+  Serial.println("Inicializando el Arduino Mega (Rebooting)");
 
   // Inicializar motores
   motor1.inicializar();
   motor2.inicializar();
 
-  // Imprimir mensaje inicial (comentado para evitar bloqueos en el arranque)
-  // Serial.println("Sistema de comandos iniciado. Ingrese comandos.");
+  // Inicializar el VCC del ACS712
+  pinMode(53, INPUT_PULLUP);
+  pinMode(53, OUTPUT); // Declarar pin 53 como salida
+  digitalWrite(53, HIGH); // Poner pin 53 en alto => entrega ~5V
+
+  // Calibrar OFFSET del ACS712 en DC
+  myACS.autoMidPointDC(1000); // 50 lecturas => Ajusta a tu gusto
+
+  // Definir el ruido
+  myACS.setNoisemV(50.88);
 }
 
 void loop() {
-  // Verificar si hay datos disponibles en el Serial sin bloquear
-  if (Serial.available() > 0) {
-    char receivedChar = Serial.read();  // Leer el carácter entrante
-    if (receivedChar != '\n') {
-      inputCommand[commandIndex++] = receivedChar;  // Agregar carácter al comando actual
-      if (commandIndex >= 100) commandIndex = 99;  // Prevenir desbordamiento del buffer
+  // Verificar si hay datos disponibles en el Serial
+  while (Serial.available() > 0) {
+    char receivedChar = Serial.read(); // Leer el carácter entrante
+
+    // Verificar delimitadores
+    if (receivedChar == '<') {
+      inputCommand = ""; // Iniciar un nuevo comando
+    } else if (receivedChar == '>') {
+      processCommand(inputCommand); // Procesar comando completo
+      inputCommand = ""; // Limpiar la variable del comando
+      lastCommandTime = millis(); // Actualizar el tiempo del último comando recibido
     } else {
-      inputCommand[commandIndex] = '\0';  // Terminar el comando con un caracter nulo
-      processCommand(inputCommand);  // Procesar el comando
-      commandIndex = 0;  // Reiniciar el índice del comando
-      lastCommandTime = millis();  // Actualizar el tiempo del último comando recibido
+      inputCommand += receivedChar; // Agregar carácter al comando actual
     }
   }
 
-  // Actualizar los motores solo si se está usando PID
+  // Actualizar los motores si se está usando PID
   if (usarPID) {
     motor1.actualizar();
     motor2.actualizar();
@@ -49,10 +59,6 @@ void loop() {
 
   // Verificar si ha pasado el tiempo de espera sin recibir comandos
   if (millis() - lastCommandTime > timeout) {
-    if (usarPID) {
-      Serial.println("Timeout alcanzado, desactivando motores.");
-    }
-    // Detener los motores y deshabilitar el controlador
     motor1.controlarMotor(0);
     motor2.controlarMotor(0);
     motor1.desactivarMotor();
@@ -61,84 +67,123 @@ void loop() {
   }
 }
 
-void leerEncoders() {
-  // Leer los valores de los encoders de ambos motores y enviar la respuesta
-  long encoder1 = motor1.leerEncoder();
-  long encoder2 = motor2.leerEncoder();
-  String response = String(encoder1) + "," + String(encoder2);
-  Serial.println(response);
-}
-
-void processCommand(char* command) {
-  switch (command[0]) {
-    case 'm': {
-      // Comando para configurar velocidades de los motores usando PID
-      char* velocidadMotor1 = strtok(command + 2, " ");
-      char* velocidadMotor2 = strtok(NULL, " ");
-
-      if (velocidadMotor1 != NULL && velocidadMotor2 != NULL) {
-        // Convertir a float
-        float velMotor1RPS = atof(velocidadMotor1);
-        float velMotor2RPS = atof(velocidadMotor2);
-
-        // Configurar las velocidades de los motores usando PID
-        motor1.setReferenciaVelocidadRPS(velMotor1RPS);
-        motor2.setReferenciaVelocidadRPS(velMotor2RPS);
-
-        usarPID = true;  // Asegurarse de que el PID esté activado
-        if (velMotor1RPS == 0 && velMotor2RPS == 0) {
-          motor1.controlarMotor(0);
-          motor2.controlarMotor(0);
-          usarPID = false;
-          motor1.desactivarMotor();
-          motor2.desactivarMotor();
-        }
-      }
+void processCommand(String command) {
+switch (command[0]) {
+  case 'm': {
+    // Verificar si el segundo carácter es un espacio
+    if (command.length() < 3 || command[1] != ' ') {
+      Serial.println("<Error: Formato inválido. Debe ser <m valor1 valor2>>");
       break;
     }
+
+    // Eliminar el prefijo "m " (incluyendo el espacio)
+    command.remove(0, 2);
+
+    // Verificar si hay exactamente un espacio separando los valores
+    int spaceIndex = command.indexOf(' ');
+    if (spaceIndex == -1 || spaceIndex == 0 || spaceIndex == command.length() - 1) {
+      Serial.println("<Error: Formato de comando inválido>");
+      break;
+    }
+
+    // Separar las velocidades y convertir a float
+    float velMotor1RPS = command.substring(0, spaceIndex).toFloat();
+    float velMotor2RPS = command.substring(spaceIndex + 1).toFloat();
+
+    // Configurar las velocidades de los motores
+    motor1.setReferenciaVelocidadRPS(velMotor1RPS);
+    motor2.setReferenciaVelocidadRPS(velMotor2RPS);
+    usarPID = true;
+
+    // Caso especial: detener motores si ambas velocidades son 0
+    if (velMotor1RPS == 0 && velMotor2RPS == 0) {
+      motor1.controlarMotor(0);
+      motor2.controlarMotor(0);
+      usarPID = false;
+      motor1.desactivarMotor();
+      motor2.desactivarMotor();
+    }
+    break;
+  }
+
     case 'o': {
-      // Comando para configurar PWM de los motores directamente (sin PID)
-      char* pwmMotor1 = strtok(command + 2, " ");
-      char* pwmMotor2 = strtok(NULL, " ");
+      // Controlar motores directamente con PWM (sin PID)
+      command.remove(0, 1); // Eliminar el prefijo "o"
+      int spaceIndex = command.indexOf(' ');
+      int pwmMotor1Value = command.substring(0, spaceIndex).toInt();
+      int pwmMotor2Value = command.substring(spaceIndex + 1).toInt();
 
-      if (pwmMotor1 != NULL && pwmMotor2 != NULL) {
-        // Convertir a entero
-        int pwmMotor1Value = atoi(pwmMotor1);
-        int pwmMotor2Value = atoi(pwmMotor2);
+      motor1.controlarMotor(pwmMotor1Value);
+      motor2.controlarMotor(pwmMotor2Value);
+      usarPID = false;
 
-        // Controlar los motores directamente con PWM (sin PID)
-        motor1.controlarMotor(pwmMotor1Value);
-        motor2.controlarMotor(pwmMotor2Value);
-
-        usarPID = false;  // Desactivar el uso de PID
-        Serial.println("Control PWM directo activado:");
-        Serial.print("Motor 1 (PWM): ");
-        Serial.println(pwmMotor1Value);
-        Serial.print("Motor 2 (PWM): ");
-        Serial.println(pwmMotor2Value);
-      }
+      Serial.println("<Control PWM directo activado>");
+      Serial.print("<Motor 1 (PWM): ");
+      Serial.print(pwmMotor1Value);
+      Serial.println(">");
+      Serial.print("<Motor 2 (PWM): ");
+      Serial.print(pwmMotor2Value);
+      Serial.println(">");
       break;
     }
+
     case 'b': {
-      // Comando para devolver el baudrate
-      Serial.print("Baudrate actual: ");
-      Serial.println(Baudrate);
+      Serial.print("<Baudrate actual: ");
+      Serial.print(115200);
+      Serial.println(">");
       break;
     }
+
     case 'e': {
-      // Comando para devolver los valores de los encoders
-      leerEncoders();
+      Serial.print("<");
+      Serial.print(motor1.leerEncoder());
+      Serial.print(",");
+      Serial.print(motor2.leerEncoder());
+      Serial.println(">");
       break;
     }
+
     case 'r': {
-      // Comando para resetear los encoders
-      motor1.inicializar();  // Esto reinicia el encoder del motor 1
-      motor2.inicializar();  // Esto reinicia el encoder del motor 2
+      motor1.resetEncodersValues();
+      motor2.resetEncodersValues();
+      Serial.println("<Encoders reseteados>");
       break;
     }
+
+    case 'i': {
+      Serial.println("<OK>");
+      break;
+    }
+
+    case 'v': {
+      Serial.print("<");
+      Serial.print(motor1.getVelocidadRPS());
+      Serial.print(",");
+      Serial.print(motor2.getVelocidadRPS());
+      Serial.println(">");
+      break;
+    }
+
+    case 'c': {
+      float current_mA = myACS.mA_DC(60); // Leer corriente
+      float umbral = 50.0;
+
+      if (current_mA > umbral) {
+        // Corriente positiva
+      } else if (current_mA < -umbral) {
+        // Corriente negativa
+      } else {
+        current_mA = 0.0;
+      }
+
+      Serial.print("<Corriente (mA): ");
+      Serial.print(current_mA / 1000);
+      Serial.println(">");
+      break;
+    }
+
     default: {
-      // Comando inválido
-      Serial.println("Comando inválido.");
+      Serial.println("<Comando inválido>");
       break;
     }
   }

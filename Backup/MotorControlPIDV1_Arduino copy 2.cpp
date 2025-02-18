@@ -136,12 +136,7 @@ class Motor {
     float calcularPID(float referencia, float actual) {
       errorActual = referencia - actual;
       sumaErrores += errorActual;
-      //Linea Agregada el 23 de Enero. A ver si mejora el antiwindup.
-
-    // Evitamos la acumulación descontrolada del error integral si la salida está saturada
-    /*if (valorPWM < 255 && valorPWM > -255) {
-        sumaErrores += errorActual;
-    }*/
+      
       //Definimos un antiwindup. Para evitar la acumulacion de errores.
       if (sumaErrores > 1000) sumaErrores = 1000; // Ajusta según tus necesidades
       if (sumaErrores < -1000) sumaErrores = -1000;
@@ -200,13 +195,8 @@ class Motor {
       digitalWrite(pinIN1, LOW); // Apagar las entradas del motor
       digitalWrite(pinIN2, LOW); // Apagar las entradas del motor
     }
-
-
-  void resetEncodersValues(){
-  encoder.write(0);
-}
-
 };
+
 /* Modificaciones realizadas:
 1. Se agregó la función `desactivarMotor()` para desactivar el enable del controlador L298N y poner a LOW las entradas del motor.
    - Esta función se utiliza para desactivar completamente el motor cuando no se reciben comandos.
