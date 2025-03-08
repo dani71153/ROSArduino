@@ -68,6 +68,7 @@ class Motor {
     const float pulsosPorRevolucion = 270 * 64; // Pulsos del encoder por revolución
     float valorPWM; // Nueva variable para almacenar el valor actual del PWM
     float ajuste = 1;
+    float referenciaAnterior = 0.0; // Nueva variable para almacenar la referencia anterior
   public:
     Motor(int enable, int in1, int in2, int encoderA, int encoderB, float kp, float ki, float kd, unsigned long muestreo) 
       : pinEnable(enable), pinIN1(in1), pinIN2(in2), pinEncoderA(encoderA), pinEncoderB(encoderB), kp(kp), ki(ki), kd(kd), 
@@ -90,12 +91,26 @@ class Motor {
 
     // Configuración de velocidad por ticks por segundo
     void setReferenciaVelocidad(float referencia) {
-      referenciaVelocidad = referencia;
+        // Verificar si hay un cambio de referencia
+        if (referencia != referenciaAnterior && referencia != 0) {
+            errorActual = 0; // Resetear el error actual
+            sumaErrores = 0; // Resetear la suma de errores
+        }
+        referenciaAnterior = referencia; // Actualizar la referencia anterior
+        referenciaVelocidad = referencia; // Asignar la nueva referencia
     }
 
     // Configuración de velocidad por RPS (Revoluciones por segundo)
     void setReferenciaVelocidadRPS(float rps) {
-      referenciaVelocidad = (rps * pulsosPorRevolucion) / ajuste; // Convertir RPS a ticks por segundo
+      float nuevaReferencia = (rps * pulsosPorRevolucion) / ajuste; // Convertir RPS a ticks por segundo
+
+      // Verificar si hay un cambio de referencia
+      if (nuevaReferencia != referenciaAnterior && nuevaReferencia != 0) {
+          errorActual = 0; // Resetear el error actual
+          sumaErrores = 0; // Resetear la suma de errores
+      }
+      referenciaAnterior = nuevaReferencia; // Actualizar la referencia anterior
+      referenciaVelocidad = nuevaReferencia; // Asignar la nueva referencia
     }
 
     // Configuración de velocidad por RPM (Revoluciones por minuto)
@@ -130,16 +145,8 @@ class Motor {
       return velocidad;
     }
 
-
-
-/** Version Original de Calcular PID, no tiene el decremento y ajuste de las ganancias a medida que aumenta la velocidad.*/
     float calcularPID(float referencia, float actual) {
-        if(referencia == 0)
-      {
-        errorActual=0;
-        sumaErrores =0;
-      }
-
+ 
       errorActual = referencia - actual;
       sumaErrores += errorActual;
       //Linea Agregada el 23 de Enero. A ver si mejora el antiwindup.
@@ -149,8 +156,8 @@ class Motor {
         sumaErrores += errorActual;
     }*/
       //Definimos un antiwindup. Para evitar la acumulacion de errores.
-      if (sumaErrores > 1000) sumaErrores = 1000; // Ajusta según tus necesidades
-      if (sumaErrores < -1000) sumaErrores = -1000;
+      if (sumaErrores > 60000) sumaErrores = 60000; // Ajusta según tus necesidades
+      if (sumaErrores < -60000) sumaErrores = -60000;
 
       derivadaError = errorActual - errorPrevio;
 
