@@ -56,10 +56,7 @@ class Motor {
     int pinEncoderB;
     float kp, ki, kd;
     float referenciaVelocidad;
-    float errorActual;
-    float errorPrevio;
-    float sumaErrores;
-    float derivadaError;
+    float errorActual, errorPrevio, sumaErrores, derivadaError;
     unsigned long tiempoPrevio;
     unsigned long intervaloMuestreo;
     Encoder encoder;
@@ -69,6 +66,15 @@ class Motor {
     float valorPWM; // Nueva variable para almacenar el valor actual del PWM
     float ajuste = 1;
     float referenciaAnterior = 0.0; // Nueva variable para almacenar la referencia anterior
+    float valorPIDAnterior = 0.0; // Valor anterior del PID
+    float maxCambioRampa = 2;  // Cambio máximo permitido por iteración
+    static const int numLecturasFiltro = 5; // Número de lecturas para el filtro de media móvil
+    long bufferLecturas[numLecturasFiltro]; // Buffer para almacenar las lecturas del encoder
+    int indiceFiltro; // Índice para las lecturas del filtro
+    long sumaLecturas; // Suma de las lecturas para el filtro
+    float salidaIIR; // Variable para almacenar la salida del filtro IIR
+    float alpha = 0.5; // Coeficiente de suavizado para el filtro IIR
+
   public:
     Motor(int enable, int in1, int in2, int encoderA, int encoderB, float kp, float ki, float kd, unsigned long muestreo) 
       : pinEnable(enable), pinIN1(in1), pinIN2(in2), pinEncoderA(encoderA), pinEncoderB(encoderB), kp(kp), ki(ki), kd(kd), 
@@ -85,8 +91,12 @@ class Motor {
       // Configuración del encoder
       posicionEncoder = encoder.read();
 
-      // Inicializar tiempo
+      // Inicializar tiempo y lecturas del encoder
       tiempoPrevio = millis();
+      indiceFiltro = 0;
+      sumaLecturas = 0;
+      memset(bufferLecturas, 0, sizeof(bufferLecturas));
+      salidaIIR = 0; // Inicializar la salida del filtro IIR
     }
 
     // Configuración de velocidad por ticks por segundo
@@ -130,44 +140,82 @@ class Motor {
         tiempoPrevio = tiempoActual;
 
         valorPWM = calcularPID(referenciaVelocidad, velocidadActual); // Guardar el valor del PWM
-        controlarMotor(valorPWM);
       }
+      controlarMotor(valorPWM);
+
     }
 
     long leerEncoder() {
-      return encoder.read();
+      // Leer el valor actual del encoder
+      long lecturaActual = encoder.read();
+
+      // Actualizar el buffer y la suma para el filtro de media móvil
+      sumaLecturas -= bufferLecturas[indiceFiltro];
+      bufferLecturas[indiceFiltro] = lecturaActual;
+      sumaLecturas += lecturaActual;
+
+      // Avanzar el índice del buffer
+      indiceFiltro = (indiceFiltro + 1) % numLecturasFiltro;
+
+      // Salida del filtro de media móvil
+      long salidaMediaMovil = sumaLecturas / numLecturasFiltro;
+
+      // Aplicar el filtro IIR en cascada
+      salidaIIR = alpha * salidaMediaMovil + (1 - alpha) * salidaIIR;
+
+      // Retornar el valor filtrado por el IIR
+      return salidaIIR;
     }
 
     float calcularVelocidad(long posicionActual, long posicionAnterior, unsigned long tiempoAnterior) {
+      // Usar el valor filtrado del encoder
       long deltaPosicion = posicionActual - posicionAnterior;
       unsigned long deltaTiempo = millis() - tiempoAnterior;
+
+      // Evitar división por cero
+      if (deltaTiempo == 0) {
+          return 0;
+      }
+
+      // Calcular la velocidad en ticks por segundo
       float velocidad = (deltaPosicion / (float)deltaTiempo) * 1000;
+
+      // Aplicar un filtro adicional si es necesario
+      // Por ejemplo, un filtro de media móvil o un filtro de Kalman
+
       return velocidad;
     }
 
     float calcularPID(float referencia, float actual) {
- 
       errorActual = referencia - actual;
       sumaErrores += errorActual;
-      //Linea Agregada el 23 de Enero. A ver si mejora el antiwindup.
-
-    // Evitamos la acumulación descontrolada del error integral si la salida está saturada
-    /*if (valorPWM < 255 && valorPWM > -255) {
-        sumaErrores += errorActual;
-    }*/
-      //Definimos un antiwindup. Para evitar la acumulacion de errores.
-      if (sumaErrores > 60000) sumaErrores = 60000; // Ajusta según tus necesidades
-      if (sumaErrores < -60000) sumaErrores = -60000;
+      
+      // Agregamos una proteccion atraves de la suma de los errores.  Para ponerle un limite.
+      if (sumaErrores > 65536) sumaErrores = 65536;
+      if (sumaErrores < -65536) sumaErrores = -65536;
 
       derivadaError = errorActual - errorPrevio;
 
-      float salida = (kp * errorActual) + (ki * sumaErrores) + (kd * derivadaError);
+      float salidaSinLimitar = (kp * errorActual) + (ki * sumaErrores) + (kd * derivadaError);
       errorPrevio = errorActual;
 
-      if (salida > 255) salida = 255;
-      if (salida < -255) salida = -255;
-
-      return salida;
+      // Saturación normal
+      if (salidaSinLimitar > 255) salidaSinLimitar = 255;
+      if (salidaSinLimitar < -255) salidaSinLimitar = -255;
+      
+      // Aplicar limitador de rampa
+      float cambio = salidaSinLimitar - valorPIDAnterior;
+      
+      // Limitar la tasa de cambio
+      if (cambio > maxCambioRampa)
+        cambio = maxCambioRampa;
+      else if (cambio < -maxCambioRampa)
+        cambio = -maxCambioRampa;
+      
+      float salidaLimitada = valorPIDAnterior + cambio;
+      valorPIDAnterior = salidaLimitada;
+      
+      return salidaLimitada;
     }
 
     void controlarMotor(float valorPID) {
@@ -180,10 +228,16 @@ class Motor {
         digitalWrite(pinIN2, HIGH);
         analogWrite(pinEnable, (int)abs(valorPID));
       } else {
-        //Agregamos una parada.
-        digitalWrite(pinIN1, LOW);
-        digitalWrite(pinIN2, HIGH);
-        analogWrite(pinEnable, 0);
+        // Modificar el comportamiento del freno activo
+        // Aplicar freno solo si el motor debe detenerse completamente
+        if (referenciaVelocidad == 0) {
+            digitalWrite(pinIN1, HIGH);
+            digitalWrite(pinIN2, HIGH); // Freno activo
+            analogWrite(pinEnable, 0);
+        } else {
+            // Mantener el último estado del motor
+            analogWrite(pinEnable, 0);
+        }
       }
     }
 
@@ -214,11 +268,9 @@ class Motor {
       digitalWrite(pinIN2, LOW); // Apagar las entradas del motor
     }
 
-
-  void resetEncodersValues(){
-  encoder.write(0);
-}
-
+    void resetEncodersValues(){
+      encoder.write(0);
+    }
 };
 /* Modificaciones realizadas:
 1. Se agregó la función `desactivarMotor()` para desactivar el enable del controlador L298N y poner a LOW las entradas del motor.

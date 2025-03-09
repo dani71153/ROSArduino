@@ -4,9 +4,15 @@
 // === CONFIGURACIÓN DEL SENSOR ACS712 ===
 ACS712 myACS(A15, 5.0, 1023, 185);
 
-// Instanciar motores
-Motor motor1(5, 7, 8, 19, 18, 0.7, 3.9, 0.1, 1);
-Motor motor2(44, A13, A12, 3, 2, 0.7, 3.9, 0.05, 1);
+// // Instanciar motores
+Motor motor1(5, 7, 8, 19, 18, 0.1, 0.01, 0.01, 50);
+// Motor motor2(44, A13, A12, 3, 2, 0.7, 3.9, 0.05, 1);
+
+
+// // Instanciar motores
+// Motor motor1(5, 7, 8, 19, 18, 0, 0, 0, 1);
+Motor motor2(44, A13, A12, 3, 2, 0, 0, 0, 1);
+
 
 //Motor motor1(5, 7, 8, 19, 18, 0.25, 0.4, 0.2, 1); Valores interesantes
 
