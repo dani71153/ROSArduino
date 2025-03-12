@@ -166,17 +166,7 @@ switch (command[0]) {
 
     case 'c': {
       float current_mA = myACS.mA_DC(60); // Leer corriente
-      float umbral = 50.0;
-
-      if (current_mA > umbral) {
-        // Corriente positiva
-      } else if (current_mA < -umbral) {
-        // Corriente negativa
-      } else {
-        current_mA = 0.0;
-      }
-
-      Serial.print("<Corriente (mA): ");
+      Serial.print("<");
       Serial.print(current_mA / 1000);
       Serial.println(">");
       break;
