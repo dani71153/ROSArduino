@@ -21,7 +21,7 @@
 
 // --- Instanciación de los objetos Motor para BTS7960 ---
 Motor motor1(M1_RPWM, M1_LPWM, M1_R_EN, M1_L_EN, M1_ENC_A, M1_ENC_B, 0.1, 0.0, 0.0, 10);
-Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.0, 0.0, 0.0, 10);
+Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.1, 0.0, 0.0, 10);
 
 // === CONFIGURACIÓN DEL SENSOR ACS712 ===
 ACS712 myACS(A15, 5.0, 1023, 185);
