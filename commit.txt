@@ -1,0 +1,14 @@
+git commit -am "feat(control): Calibración inicial del PID en vacío e integración de rampa de aceleración
+
+- Se calibró el PID utilizando el robot suspendido en el aire, sin carga sobre las ruedas ni fricción con el suelo, permitiendo una respuesta rápida y sin perturbaciones externas.
+- Se utilizó un tacómetro externo para validar la velocidad de giro reportada por los encoders, ajustando las constantes del PID hasta lograr una correspondencia razonable entre RPM deseado y RPM real.
+- Limitaciones: esta calibración en vacío no refleja completamente el comportamiento real bajo carga. Se espera una caída de rendimiento cuando se aplique fricción del piso, por lo cual se requerirá recalibración final sobre el terreno.
+
+- Se creó una clase independiente de rampa de aceleración (RampaVelocidad.cpp), implementada como mecanismo de suavizado de cambios de velocidad, con el objetivo de evitar latigazos y picos de corriente en los motores.
+- La rampa se integró dentro del bucle de control del motor, interpolando de forma progresiva desde la velocidad actual hasta la velocidad de referencia del PID.
+- Se fijó una aceleración máxima de 85000 ticks/s² como límite de cambio por segundo, calibrada empíricamente para mantener una transición suave sin sacrificar capacidad de respuesta.
+- Se añadió un método `sincronizarRampa()` en la clase Motor para alinear la velocidad de la rampa con la velocidad actual del encoder al recibir un nuevo comando.
+- Se forzó una ejecución inmediata del método `actualizar()` justo después de recibir un comando de velocidad, eliminando el retardo del primer ciclo PID y evitando el falso arranque.
+- La clase RampaVelocidad fue diseñada como un `.cpp` independiente, sin cabecera `.h`, para encapsular completamente su lógica y facilitar futuras adaptaciones.
+
+Refs #pid-calibration #ramp-control #motor-safety #soft-start"

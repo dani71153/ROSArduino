@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Encoder.h>
+#include "RampaVelocidad.cpp"
 
 
 /**
@@ -72,6 +73,10 @@ private:
 
     // --- Constantes del Motor/Encoder ---
     const float pulsosPorRevolucion = 270 * 64;
+    float currentReferenciaVelocidad = 0;  // velocidad real usada en PID
+    float maxAceleracion = 10000;          // ticks/s², ajústalo
+    RampaVelocidad rampa;
+
 
 public:
     /**
@@ -92,7 +97,9 @@ public:
           pinEncoderA(encoderA), pinEncoderB(encoderB),
           kp(Kp), ki(Ki), kd(Kd),
           intervaloMuestreo(muestreo),
-          encoder(encoderA, encoderB)
+          encoder(encoderA, encoderB),
+          rampa(85000.0f) // o el valor de aceleración máxima que desees
+
     {
         // Inicializar variables de estado
         referenciaVelocidad = 0;
@@ -152,10 +159,13 @@ public:
             posicionEncoder = leerEncoder();
             velocidadActual = calcularVelocidad(posicionEncoder, posicionAnterior, tiempoPrevio);
             tiempoPrevio = tiempoActual;
-            valorPWM = calcularPID(referenciaVelocidad, velocidadActual);
+            float referenciaSuavizada = rampa.actualizar(referenciaVelocidad);
+            valorPWM = calcularPID(referenciaSuavizada, velocidadActual);
             controlarMotor(valorPWM);
         }
     }
+
+
 
     /** @return El número de ticks acumulados leídos por el encoder. */
     long leerEncoder() {
@@ -254,4 +264,8 @@ public:
 
     /** @return El último valor de salida del PID calculado (el valor PWM). */
     float getValorPWM() { return valorPWM; }
+    
+    void sincronizarRampa() {
+    rampa.setVelocidadActual(velocidadActual);}
+
 };

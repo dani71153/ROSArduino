@@ -12,16 +12,16 @@
 #define M1_ENC_B 19
 
 // --- Pines Motor 2 (Izquierdo) ---
-#define M2_RPWM 7
-#define M2_LPWM 4
+#define M2_RPWM 4  // antes era 7
+#define M2_LPWM 7  // antes era 4
 #define M2_R_EN 6
 #define M2_L_EN 5
-#define M2_ENC_A 2
-#define M2_ENC_B 3
+#define M2_ENC_A 3
+#define M2_ENC_B 2
 
-// --- Instanciación de los objetos Motor para BTS7960 ---
-Motor motor1(M1_RPWM, M1_LPWM, M1_R_EN, M1_L_EN, M1_ENC_A, M1_ENC_B, 0.1, 0.0, 0.0, 10);
-Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.1, 0.0, 0.0, 10);
+// --- Instanciación de los objetos Motor para BTS7960 --- 
+Motor motor1(M1_RPWM, M1_LPWM, M1_R_EN, M1_L_EN, M1_ENC_A, M1_ENC_B, 0.12, 0.0857, 0.001, 10); //Punto muy cecano 0.075 //PID calibrado, sin peso. 
+Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.12, 0.09, 0.001, 10);
 
 // === CONFIGURACIÓN DEL SENSOR ACS712 ===
 ACS712 myACS(A15, 5.0, 1023, 185);
@@ -140,7 +140,12 @@ void processCommand(String command) {
       float velMotor2RPS = command.substring(spaceIndex + 1).toFloat();
       motor1.setReferenciaVelocidadRPS(velMotor1RPS);
       motor2.setReferenciaVelocidadRPS(velMotor2RPS);
+      motor1.actualizar();  // Ejecuta un ciclo completo con la nueva referencia
+      motor2.actualizar();
       usarPID = true;
+      motor1.sincronizarRampa();  // función que vamos a crear
+      motor2.sincronizarRampa();
+
 
       if (velMotor1RPS == 0 && velMotor2RPS == 0) {
         motor1.controlarMotor(0);
