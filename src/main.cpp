@@ -1,5 +1,11 @@
 #include "MotorControlPIDV2_Arduino.cpp" // Se recomienda incluir el .h
 #include <ACS712.h>
+#include "mpu9250.cpp" // Se recomienda incluir el .h
+
+//Definimos los valores del MPU9250
+#define TCA_ADDR 0x70
+#define MPU_ADDR 0x68
+#define TCA_CHANNEL 2
 
 // === PINES Y CONFIGURACIÓN DE MOTORES (ACTUALIZADO PARA BTS7960) ===
 
@@ -25,6 +31,10 @@ Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.12, 0.09,
 
 // === CONFIGURACIÓN DEL SENSOR ACS712 ===
 ACS712 myACS(A15, 5.0, 1023, 185);
+
+// == INICIALIZAMOS MPU_9250 ==
+Mpu9250Tca imu(Wire, TCA_ADDR, MPU_ADDR, TCA_CHANNEL);
+
 
 // === VARIABLES DE CONTROL Y ESTADO ===
 String inputCommand = ""; 
@@ -57,6 +67,7 @@ void setup() {
   myACS.setNoisemV(50.88);
   
   lastCommandTime = millis();
+  imu.begin(115200); //Inicializamos el 9250
 }
 
 void loop() {
@@ -237,6 +248,16 @@ void processCommand(String command) {
       Serial.println(">");
       break;
     }
+    
+    
+  case '1': {
+  imu.update();
+  Serial.print("<");
+  imu.printSerial();   // imprime A:...;G:...;M:...;T:...
+  Serial.println(">");
+  break;
+  }
+
 
     default: {
       Serial.println("<Comando invalido>");

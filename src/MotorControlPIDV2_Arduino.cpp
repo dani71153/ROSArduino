@@ -98,7 +98,7 @@ public:
           kp(Kp), ki(Ki), kd(Kd),
           intervaloMuestreo(muestreo),
           encoder(encoderA, encoderB),
-          rampa(85000.0f) // o el valor de aceleración máxima que desees
+          rampa(45000.0f) // o el valor de aceleración máxima que desees //Valores interesantes == 50000
 
     {
         // Inicializar variables de estado
