@@ -1,14 +1,10 @@
-#include "MotorControlPIDV2_Arduino.cpp"  // ideal: .h
-#include "mpu9250&bno055.cpp"             // contiene TcaI2cBus + drivers
+#include "MotorControlPIDV2_Arduino.cpp" // Se recomienda incluir el .h
+#include "mpu9250.cpp" // Se recomienda incluir el .h
 
+//Definimos los valores del MPU9250
 #define TCA_ADDR 0x70
-#define CH_MPU   0
-#define CH_BNO   2
-
-TcaI2cBus       bus(Wire, TCA_ADDR, 400000);     // 400kHz unificado
-Mpu9250Driver   imu1_drv(bus, CH_MPU, 0x68);     // reemplaza Mpu9250Tca
-Bno055Driver    bno_drv(bus, CH_BNO, 0x29);      // reemplaza Bno055Tca
-
+#define MPU_ADDR 0x68
+#define TCA_CHANNEL 1
 // === PINES Y CONFIGURACIÓN DE MOTORES (ACTUALIZADO PARA BTS7960) ===
 
 // --- Pines Motor 1 (Derecho) ---
@@ -32,6 +28,9 @@ Motor motor1(M1_RPWM, M1_LPWM, M1_R_EN, M1_L_EN, M1_ENC_A, M1_ENC_B, 0.12, 0.085
 Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.12, 0.09, 0.001, 10);
 
 // === CONFIGURACIÓN DEL SENSOR ACS712 ===
+
+// == INICIALIZAMOS MPU_9250 ==
+Mpu9250Tca imu(Wire, TCA_ADDR, MPU_ADDR, TCA_CHANNEL);
 
 
 // === VARIABLES DE CONTROL Y ESTADO ===
@@ -60,14 +59,11 @@ void setup() {
   motor1.resetEncoderValues();
   motor2.resetEncoderValues();
 
-  bus.begin();          // inicia I2C y limpia bus
-  imu1_drv.begin();     // reset + init MPU9250
-  bno_drv.begin();      // init BNO055
-
   pinMode(53, OUTPUT);
   digitalWrite(53, HIGH); 
 
   lastCommandTime = millis();
+  imu.begin(115200); //Inicializamos el 9250
 }
 
 void loop() {
@@ -250,23 +246,12 @@ void processCommand(String command) {
     }
 
     case '1': {
-      imu1_drv.update();
-Serial.print("<"); imu1_drv.printSerial(); Serial.println(">");
-
+    imu.update();
+    Serial.print("<");
+    imu.printSerial();   // imprime A:...;G:...;M:...;T:...
+    Serial.println(">");
     break;
     }
-case '2': {
-bno_drv.update();
-Serial.print("<"); bno_drv.printSerial(); Serial.println(">");
-
-    break;
-}
-
-case 'B': {
-  if (bno_drv.begin()) Serial.println("<BNO055 inicializado correctamente>");
-  else                 Serial.println("<ERROR: BNO055 no detectado>");
-  break;
-}
 
 
     default: {
