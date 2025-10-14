@@ -1,13 +1,6 @@
 #include "MotorControlPIDV2_Arduino.cpp"  // ideal: .h
-#include "mpu9250&bno055.cpp"             // contiene TcaI2cBus + drivers
+#include "mpu9250&bno055.h"
 
-#define TCA_ADDR 0x70
-#define CH_MPU   0
-#define CH_BNO   2
-
-TcaI2cBus       bus(Wire, TCA_ADDR, 400000);     // 400kHz unificado
-Mpu9250Driver   imu1_drv(bus, CH_MPU, 0x68);     // reemplaza Mpu9250Tca
-Bno055Driver    bno_drv(bus, CH_BNO, 0x29);      // reemplaza Bno055Tca
 
 // === PINES Y CONFIGURACIÓN DE MOTORES (ACTUALIZADO PARA BTS7960) ===
 
@@ -52,22 +45,20 @@ void processCommand(String command);
 
 void setup() {
   Serial.begin(115200);
-    delay(700); // Espera 200 ms para dar tiempo a que la PC abra el puerto
+   delay(700); // Espera 200 ms para dar tiempo a que la PC abra el puerto
   Serial.println("Inicializando el Arduino Mega (Rebooting)");
    delay(700); // Espera 200 ms para dar tiempo a que la PC abra el puerto
+  sensores_init();  // inicializa Wire, el multiplexor y deja todo listo
+
   motor1.inicializar();
   motor2.inicializar();
   motor1.resetEncoderValues();
   motor2.resetEncoderValues();
-
-  bus.begin();          // inicia I2C y limpia bus
-  imu1_drv.begin();     // reset + init MPU9250
-  bno_drv.begin();      // init BNO055
-
-  pinMode(53, OUTPUT);
-  digitalWrite(53, HIGH); 
+  // pinMode(53, OUTPUT);
+  // digitalWrite(53, HIGH); 
 
   lastCommandTime = millis();
+  
 }
 
 void loop() {
@@ -249,24 +240,15 @@ void processCommand(String command) {
       break;
     }
 
-    case '1': {
-      imu1_drv.update();
-Serial.print("<"); imu1_drv.printSerial(); Serial.println(">");
+  case '1': {
+    read_mpu_on_channel(2); // o el canal que te funcione
+    break;
+  }
+  case '2': {
+    read_bno_on_channel(0);
 
     break;
-    }
-case '2': {
-bno_drv.update();
-Serial.print("<"); bno_drv.printSerial(); Serial.println(">");
-
-    break;
-}
-
-case 'B': {
-  if (bno_drv.begin()) Serial.println("<BNO055 inicializado correctamente>");
-  else                 Serial.println("<ERROR: BNO055 no detectado>");
-  break;
-}
+  }
 
 
     default: {

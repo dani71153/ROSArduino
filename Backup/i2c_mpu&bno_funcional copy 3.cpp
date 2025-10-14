@@ -1,7 +1,15 @@
-#include <mpu9250&bno055.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <MPU9250_asukiaaa.h>
+#include <Adafruit_BNO055.h>
 
-#define DEBUG_TCA 0
-#define DEBUG_I2C 0
+#define TCAADDR 0x70
+#define I2C_KHZ 400000
+
+const uint8_t canales[] = {0, 2};
+const uint8_t numCanales = sizeof(canales)/sizeof(canales[0]);
+unsigned long sensorDelay = 10;
+unsigned long lastMillis = 0;
 
 void tcaselect(uint8_t i){
   if(i>7) return;
@@ -9,7 +17,6 @@ void tcaselect(uint8_t i){
   Wire.write(1 << i);
   Wire.endTransmission();
 }
-
 void tcadeselectAll(){
   Wire.beginTransmission(TCAADDR);
   Wire.write(0x00);
@@ -17,43 +24,31 @@ void tcadeselectAll(){
 }
 
 bool rd8(uint8_t addr,uint8_t reg,uint8_t& val){
-  Wire.beginTransmission(addr); 
-  Wire.write(reg);
+  Wire.beginTransmission(addr); Wire.write(reg);
   if(Wire.endTransmission(false)!=0) return false;
   if(Wire.requestFrom((int)addr,1)!=1) return false;
-  val = Wire.read(); 
-  return true;
+  val = Wire.read(); return true;
 }
-
 bool wr8(uint8_t addr,uint8_t reg,uint8_t val){
-  Wire.beginTransmission(addr); 
-  Wire.write(reg); 
-  Wire.write(val);
-  return (Wire.endTransmission(true)==0);
+  Wire.beginTransmission(addr); Wire.write(reg); Wire.write(val);
+  return Wire.endTransmission(true)==0;
 }
-
 void mpu_quarantine(uint8_t a){
-  wr8(a,0x6A,0x00);
-  wr8(a,0x37,0x00);
-  wr8(a,0x6B,0x40);
+  wr8(a,0x6A,0x00); // User control
+  wr8(a,0x37,0x00); // INT Pin/Bypass
+  wr8(a,0x6B,0x40); // Sleep
 }
 
 void read_mpu_on_channel(uint8_t ch) {
   uint8_t who=0, mpuAddr=0;
   tcaselect(ch);
-
   if(rd8(0x68,0x75,who) && (who==0x71||who==0x73)) mpuAddr=0x68;
   else if(rd8(0x69,0x75,who) && (who==0x71||who==0x73)) mpuAddr=0x69;
-
-  if (!mpuAddr) {
-    Serial.print("MPU,"); Serial.print(ch); Serial.println(",NA");
-    tcadeselectAll();
-    return;
-  }
+  else { Serial.print("MPU,"); Serial.print(ch); Serial.println(",NA"); tcadeselectAll(); return; }
 
   wr8(mpuAddr,0x6B,0x80);
   unsigned long t0 = millis();
-  while(millis()-t0 < 6) {}
+  while(millis()-t0 < 30) {}
 
   wr8(mpuAddr,0x6B,0x01);
 
@@ -74,25 +69,12 @@ void read_mpu_on_channel(uint8_t ch) {
 void read_bno_on_channel(uint8_t ch) {
   uint8_t id=0, addr=0;
   tcaselect(ch);
-
-  if(rd8(0x29,0x00,id)) {
-    if(id == 0xA0) addr=0x29;
-  }
-  if(!addr && rd8(0x28,0x00,id)) {
-    if(id == 0xA0) addr=0x28;
-  }
-  if(!addr) {
-    Serial.print("BNO,"); Serial.print(ch); Serial.println(",NA");
-    tcadeselectAll();
-    return;
-  }
+  if(rd8(0x28,0x00,id) && id==0xA0) addr=0x28;
+  else if(rd8(0x29,0x00,id) && id==0xA0) addr=0x29;
+  else { Serial.print("BNO,"); Serial.print(ch); Serial.println(",NA"); tcadeselectAll(); return; }
 
   Adafruit_BNO055 bno(55, addr, &Wire);
-  if(!bno.begin()) { 
-    Serial.print("BNO,"); Serial.print(ch); Serial.println(",NA"); 
-    tcadeselectAll(); 
-    return; 
-  }
+  if(!bno.begin()) { Serial.print("BNO,"); Serial.print(ch); Serial.println(",NA"); tcadeselectAll(); return; }
 
   bno.setMode(OPERATION_MODE_CONFIG);
   bno.setMode(OPERATION_MODE_NDOF);
@@ -110,39 +92,24 @@ void read_bno_on_channel(uint8_t ch) {
   tcadeselectAll();
 }
 
-// Función de inicialización opcional para llamar desde tu setup()
-void sensores_init(){
-  Wire.begin(); 
-  Wire.setClock(I2C_KHZ);
+void setup(){
+  Serial.begin(115200);
+  delay(300);
+  Wire.begin(); Wire.setClock(I2C_KHZ);
   tcadeselectAll();
-  Serial.println("Sensores listos.");
+  Serial.println("Listo");
+}
 
-  const uint8_t canales[] = {0, 2};
-  const uint8_t dir_bno[] = {0x28, 0x29};
-  const uint8_t dir_mpu[] = {0x68, 0x69};
-
-  for (uint8_t i = 0; i < sizeof(canales)/sizeof(canales[0]); i++) {
-    uint8_t ch = canales[i];
-    tcaselect(ch);
-
-    // Buscar BNO055
-    bool bno_ok = false;
-    for (uint8_t j = 0; j < sizeof(dir_bno)/sizeof(dir_bno[0]); j++) {
-      Wire.beginTransmission(dir_bno[j]);
-      if (Wire.endTransmission() == 0) {
-        bno_ok = true;
-      }
+void loop(){
+  static uint8_t canalIdx = 0;
+  if(millis() - lastMillis > sensorDelay) {
+    uint8_t ch = canales[canalIdx];
+    if(ch == 0) {
+      read_bno_on_channel(ch);
+    } else if(ch == 2) {
+      read_mpu_on_channel(ch);
     }
-
-    // Buscar MPU9250
-    bool mpu_ok = false;
-    for (uint8_t j = 0; j < sizeof(dir_mpu)/sizeof(dir_mpu[0]); j++) {
-      Wire.beginTransmission(dir_mpu[j]);
-      if (Wire.endTransmission() == 0) {
-        mpu_ok = true;
-      }
-    }
-
-    tcadeselectAll();
+    canalIdx = (canalIdx + 1) % numCanales;
+    lastMillis = millis();
   }
 }

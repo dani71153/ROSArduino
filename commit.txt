@@ -1,11 +1,15 @@
-feat: añadir clase MPU9250 con lectura cacheada y salida serial empaquetada
+fix(i2c-multiplexor): ambos sensores MPU9250 y BNO055 funcionan correctamente con TCA9548A
 
-- Implementada nueva clase `MPU9250` para manejo del sensor MPU9250 a través de TCA9548A.
-- Métodos principales:
-  - `begin()`: inicializa bus I2C, selecciona canal y configura el sensor.
-  - `resetI2C()`: reinicia la comunicación I2C y reconfigura el IMU.
-  - `update()`: realiza la lectura de acelerómetro, giroscopio, magnetómetro y temperatura, almacenando valores en cache.
-  - `printSerial()`: imprime los valores cacheados en formato empaquetado `<A:...;G:...;M:...;T:...>` para fácil parseo.
-- Se reemplazó la lectura directa por getters con valores cacheados para evitar problemas de comunicación y garantizar consistencia.
-- Aumentado el tiempo de settle tras selección de canal TCA a `delay(1)` para mayor estabilidad.
-- Integración en la interfaz de hardware: añadido comando `'1'` en el switch principal para solicitar y enviar datos del IMU usando la nueva clase.
+- Problema identificado: el pin 53 configurado como salida y en HIGH en el Arduino Mega generaba interferencia interna con el bus SPI, lo que afectaba el correcto funcionamiento del bus I2C y bloqueaba la comunicación con los sensores multiplexados (BNO055 y MPU9250) a través del TCA9548A.
+- Solución: se eliminó la configuración de pinMode(53, OUTPUT) y digitalWrite(53, HIGH) del setup principal. Con esto, el bus I2C quedó libre de interferencias y ambos sensores pueden ser inicializados, leídos y reportados sin errores.
+- Agregado: funciones de debug en la librería, permitiendo validar la secuencia de selección de canal, lecturas y escrituras I2C, y detección real de los sensores conectados en cada canal.
+- Estado: tanto el MPU9250 como el BNO055 reportan correctamente sus datos, y la inicialización es robusta.
+
+TODO:
+- Integrar la salida de ambos sensores en el formato de mensaje e información esperada por ROS2, tal como ya está configurado para otros sensores en el sistema.
+- Añadir más opciones de información y campos a la lectura del BNO055, para aprovechar la orientación absoluta, la temperatura, la calibración y otros vectores.
+- Integrar la información del BNO055 en el dashboard de monitoreo, siguiendo el formato original ya implementado para el MPU9250.
+- Pendiente: integración del sensor RFID en el ESP32 (cableado ya listo, falta lógica y topic ROS2), e integración del sensor de peso.
+- Objetivo próximo: una vez que el MPU9250 y el BNO055 estén disponibles y funcionales en ROS2 y se visualicen en el dashboard con odometry_filtered, comenzar pruebas intensas de mapeo y navegación con Nav2.
+
+Signed-off-by: Daniel Vasquez <daniel@example.com>

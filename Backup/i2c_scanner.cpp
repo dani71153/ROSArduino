@@ -1,66 +1,50 @@
 #include <Arduino.h>
-#include <Wire.h>
+/**
+ * TCA9548 I2CScanner.ino -- I2C bus scanner for Arduino
+ *
+ * Based on https://playground.arduino.cc/Main/I2cScanner/
+ *
+ */
 
-// Dirección I2C del PCA9548A (por defecto es 0x70, verifica tu hardware)
-#define PCA9548A_ADDR 0x70
+#include "Wire.h"
 
-// Selecciona el canal [0-7] del PCA9548A
-void selectPCAChannel(uint8_t channel) {
-  if (channel > 7) return;
-  Wire.beginTransmission(PCA9548A_ADDR);
-  Wire.write(1 << channel); // Bitmask: 1 en la posición del canal
-  Wire.endTransmission();
-  delay(2); // Pequeño retardo por seguridad
+
+#define TCAADDR 0x70
+
+void tcaselect(uint8_t i) {
+  if (i > 7) return;
+ 
+  Wire.beginTransmission(TCAADDR);
+  Wire.write(1 << i);
+  Wire.endTransmission();  
 }
 
-void setup() {
-  Wire.begin();
-  Serial.begin(115200);
-  while (!Serial);
+void setup()
+{
+    while (!Serial);
+    delay(1000);
 
-  Serial.println("===== I2C Scanner con PCA9548A =====");
-  Serial.print("Buscando PCA9548A en direccion 0x");
-  Serial.println(PCA9548A_ADDR, HEX);
+    Wire.begin();
+    
+    Serial.begin(115200);
+    Serial.println("\nTCA escaner listo");
+    
+    for (uint8_t t=0; t<8; t++) {
+      tcaselect(t);
+      Serial.print("  Escaneando salida "); Serial.println(t);
 
-  // Detectar PCA9548A
-  Wire.beginTransmission(PCA9548A_ADDR);
-  if (Wire.endTransmission() == 0) {
-    Serial.println("PCA9548A detectado correctamente.");
-  } else {
-    Serial.println("ERROR: PCA9548A NO detectado. Verifica conexion y direccion.");
-    while (1);
-  }
-}
+      for (uint8_t addr = 0; addr<=127; addr++) {
+        if (addr == TCAADDR) continue;
 
-void scanI2C(uint8_t channel) {
-  Serial.print("Canal PCA9548A: ");
-  Serial.println(channel);
-
-  selectPCAChannel(channel);
-
-  bool found = false;
-  for (uint8_t addr = 1; addr < 127; addr++) {
-    if (addr == PCA9548A_ADDR) continue; // Ignorar el multiplexor
-
-    Wire.beginTransmission(addr);
-    if (Wire.endTransmission() == 0) {
-      Serial.print("  I2C encontrado en direccion 0x");
-      Serial.println(addr, HEX);
-      found = true;
+        Wire.beginTransmission(addr);
+        if (!Wire.endTransmission()) {
+          Serial.print("  - Encontrado I2C 0x");  Serial.println(addr,HEX);
+        }
+      }
     }
-    delay(2); // Retardo pequeño para estabilidad
-  }
-  if (!found) {
-    Serial.println("  No se detectaron dispositivos.");
-  }
-  Serial.println();
+    Serial.println("Finalizado");
 }
 
-void loop() {
-  Serial.println("==== ESCANEO COMPLETO ====");
-  for (uint8_t channel = 0; channel < 8; channel++) {
-    scanI2C(channel);
-  }
-  Serial.println("==== FIN DEL ESCANEO ====\n");
-  delay(5000); // Espera 5 segundos antes de volver a escanear
+void loop() 
+{
 }
