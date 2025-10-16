@@ -241,7 +241,10 @@ void processCommand(String command) {
     }
 
   case '1': {
+    Serial.print("<");
     read_mpu_on_channel(2); // o el canal que te funcione
+    Serial.println(">");
+
     break;
   }
   case '2': {

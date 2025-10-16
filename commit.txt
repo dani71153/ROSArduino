@@ -1,15 +1,61 @@
-fix(i2c-multiplexor): ambos sensores MPU9250 y BNO055 funcionan correctamente con TCA9548A
+fix(i2c): “quarantine” del MPU9250 y persistencia del BNO055 para evitar contaminación de canal en TCA9548A
 
-- Problema identificado: el pin 53 configurado como salida y en HIGH en el Arduino Mega generaba interferencia interna con el bus SPI, lo que afectaba el correcto funcionamiento del bus I2C y bloqueaba la comunicación con los sensores multiplexados (BNO055 y MPU9250) a través del TCA9548A.
-- Solución: se eliminó la configuración de pinMode(53, OUTPUT) y digitalWrite(53, HIGH) del setup principal. Con esto, el bus I2C quedó libre de interferencias y ambos sensores pueden ser inicializados, leídos y reportados sin errores.
-- Agregado: funciones de debug en la librería, permitiendo validar la secuencia de selección de canal, lecturas y escrituras I2C, y detección real de los sensores conectados en cada canal.
-- Estado: tanto el MPU9250 como el BNO055 reportan correctamente sus datos, y la inicialización es robusta.
+### Contexto
 
-TODO:
-- Integrar la salida de ambos sensores en el formato de mensaje e información esperada por ROS2, tal como ya está configurado para otros sensores en el sistema.
-- Añadir más opciones de información y campos a la lectura del BNO055, para aprovechar la orientación absoluta, la temperatura, la calibración y otros vectores.
-- Integrar la información del BNO055 en el dashboard de monitoreo, siguiendo el formato original ya implementado para el MPU9250.
-- Pendiente: integración del sensor RFID en el ESP32 (cableado ya listo, falta lógica y topic ROS2), e integración del sensor de peso.
-- Objetivo próximo: una vez que el MPU9250 y el BNO055 estén disponibles y funcionales en ROS2 y se visualicen en el dashboard con odometry_filtered, comenzar pruebas intensas de mapeo y navegación con Nav2.
+Con TCA9548A: BNO055 en ch0 y MPU9250 en ch2. Lecturas del BNO fallaban intermitentemente (NA) había latencia en versiones antiguas del codigo, 
+debido a que se creaban las instancias y se tenian que inicializar los sensores para cada llamada.
 
-Signed-off-by: Daniel Vasquez <daniel@example.com>
+### Problema
+
+El MPU9250 podía **contaminar el bus I²C** aun cuando el TCA conmutaba a otro canal. Causas:
+
+* `I2C Master` interno activo (USER_CTRL).
+* `Bypass` hacia el AK8963 habilitado (INT_PIN_CFG).
+* Estado eléctrico manteniendo SDA/SCL en bajo.
+  Resultado: el TCA veía el bus ocupado y el BNO055 no respondía tras el cambio de canal.
+
+### Solución
+
+1. **Quarantine del MPU9250** (antes de leer BNO y al finalizar lecturas de MPU):
+
+   * `USER_CTRL (0x6A)=0x00` → I2C master OFF
+   * `INT_PIN_CFG (0x37)=0x00` → bypass OFF
+   * `PWR_MGMT_1 (0x6B)=0x40` → sleep
+     (pequeño delay µs)
+2. **Persistencia de instancias**:
+
+   * Mantener `Adafruit_BNO055` vivo y en `NDOF` (sin volver a CONFIG en cada llamada).
+   * Detectar direcciones una sola vez.
+3. **Orden de acceso**:
+
+    Antes de leer el BNO:
+
+    Seleccionar canal 2
+
+    Aplicar quarantine al MPU
+
+    Deseleccionar y conmutar al canal 0
+
+    Después de leer el MPU: aplicar quarantine inmediato.
+
+4. **Nueva función complementaria:**
+   * mpu_wake_and_bypass() reactiva el sensor antes de cada lectura.
+    *wake + bypass → el AK8963 vuelve accesible.
+    *Garantiza actualización continua sin reconstruir objetos.
+### Efectos
+
+* BNO055 vuelve a responder **siempre**.
+* Conmutación limpia de TCA; latencia reducida (sin re-`begin()`/re-config en cada ciclo).
+* Menos tráfico y estados intermedios en el bus.
+
+### Riesgos / puntos ciegos
+
+* Si algún módulo no tolera sleep frecuente, ajustar política de quarantine (p. ej., solo antes de leer BNO).
+* Si el bus queda físicamente bloqueado, considerar “bus-clear” (9 pulsos SCL) como fallback.
+
+### Notas
+
+* Se mantuvo la API pública (`read_*_on_channel`, `sensores_init`).
+* Opcional: `setExtCrystalUse(true)` tras `bno.begin()` si el módulo BNO trae cristal externo.
+ 
+ 
