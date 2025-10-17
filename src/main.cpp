@@ -1,5 +1,6 @@
 #include "MotorControlPIDV2_Arduino.cpp"  // ideal: .h
-#include "mpu9250&bno055.h"
+#include "mpu9250only.h"
+#include <math.h>
 
 
 // === PINES Y CONFIGURACIÓN DE MOTORES (ACTUALIZADO PARA BTS7960) ===
@@ -43,11 +44,42 @@ const int POSICION_TOLERANCIA = 50; // Ticks de error para considerar que se ha 
 
 void processCommand(String command);
 
+constexpr uint16_t SENSOR_SAMPLE_PERIOD_MS = 10;   // ~30 Hz
+constexpr size_t SENSOR_BATCH_CAPACITY = 1;
+constexpr unsigned long SENSOR_BATCH_FLUSH_MS = 200;
+
+
+
+
+void printMpuBlock(const MpuReading& reading);
+
+void printMpuBlock(const MpuReading& reading) {
+  if (!reading.valid) {
+    Serial.print("NA");
+    return;
+  }
+  Serial.print("A:");
+  Serial.print(reading.ax, 3); Serial.print(",");
+  Serial.print(reading.ay, 3); Serial.print(",");
+  Serial.print(reading.az, 3);
+  Serial.print(";G:");
+  Serial.print(reading.gx, 3); Serial.print(",");
+  Serial.print(reading.gy, 3); Serial.print(",");
+  Serial.print(reading.gz, 3);
+  Serial.print(";M:");
+  Serial.print(reading.mx, 3); Serial.print(",");
+  Serial.print(reading.my, 3); Serial.print(",");
+  Serial.print(reading.mz, 3);
+  Serial.print(";T:");
+  if (isnan(reading.tempC)) Serial.print("nan"); else Serial.print(reading.tempC, 2);
+}
+
+
 void setup() {
-  Serial.begin(115200);
-   delay(700); // Espera 200 ms para dar tiempo a que la PC abra el puerto
+  Serial.begin(500000);
+  delay(700); // Espera 200 ms para dar tiempo a que la PC abra el puerto
   Serial.println("Inicializando el Arduino Mega (Rebooting)");
-   delay(700); // Espera 200 ms para dar tiempo a que la PC abra el puerto
+  delay(700); // Espera 200 ms para dar tiempo a que la PC abra el puerto
   sensores_init();  // inicializa Wire, el multiplexor y deja todo listo
 
   motor1.inicializar();
@@ -240,18 +272,26 @@ void processCommand(String command) {
       break;
     }
 
-  case '1': {
-    Serial.print("<");
-    read_mpu_on_channel(2); // o el canal que te funcione
-    Serial.println(">");
+case '1': {
+  MpuReading reading;
+  read_mpu(&reading, false);   // TCA fijo en 0
+  Serial.print("<"); printMpuBlock(reading); Serial.println(">");
+  break;
+}
 
-    break;
-  }
-  case '2': {
-    read_bno_on_channel(0);
+  // case '2': {
+  //   BnoReading reading;
+  //   bool ok = read_bno_on_channel(0, &reading, false);
+  //   Serial.print("<");
+  //   if (ok && reading.valid) {
+  //     printBnoBlock(reading);
+  //   } else {
+  //     Serial.print("BNO,0,ERR");
+  //   }
+  //   Serial.println(">");
+  //   break;
+  // }
 
-    break;
-  }
 
 
     default: {
