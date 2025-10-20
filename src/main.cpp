@@ -22,8 +22,9 @@
 #define M2_ENC_B 2
 
 // --- Instanciación de los objetos Motor para BTS7960 --- 
-Motor motor1(M1_RPWM, M1_LPWM, M1_R_EN, M1_L_EN, M1_ENC_A, M1_ENC_B, 0.12, 0.0857, 0.001, 10); //Punto muy cecano 0.075 //PID calibrado, sin peso. 
-Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.12, 0.09, 0.001, 10);
+Motor motor1(M1_RPWM, M1_LPWM, M1_R_EN, M1_L_EN, M1_ENC_A, M1_ENC_B, 0.12, 0.18, 0.002, 25); //Punto muy cecano 0.075 //PID calibrado, sin peso. 
+Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.12, 0.18, 0.002, 25);
+// Motor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0, 0, 0, 25);
 
 // === CONFIGURACIÓN DEL SENSOR ACS712 ===
 
